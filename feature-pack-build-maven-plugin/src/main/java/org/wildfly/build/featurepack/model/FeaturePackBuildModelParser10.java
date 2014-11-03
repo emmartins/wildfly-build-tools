@@ -18,6 +18,7 @@ package org.wildfly.build.featurepack.model;
 
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
+import org.wildfly.build.common.model.ArtifactRefsModelParser10;
 import org.wildfly.build.common.model.ConfigModelParser10;
 import org.wildfly.build.common.model.CopyArtifactsModelParser10;
 import org.wildfly.build.common.model.FileFilter;
@@ -58,6 +59,7 @@ class FeaturePackBuildModelParser10 implements XMLElementReader<FeaturePackBuild
         DEPENDENCIES("dependencies"),
         ARTIFACT("artifact"),
         CONFIG(ConfigModelParser10.ELEMENT_LOCAL_NAME),
+        ARTIFACT_REFS(ArtifactRefsModelParser10.ELEMENT_LOCAL_NAME),
         COPY_ARTIFACTS(CopyArtifactsModelParser10.ELEMENT_LOCAL_NAME),
         FILTER(FileFilterModelParser10.ELEMENT_LOCAL_NAME),
         FILE_PERMISSIONS(FilePermissionsModelParser10.ELEMENT_LOCAL_NAME),
@@ -75,6 +77,7 @@ class FeaturePackBuildModelParser10 implements XMLElementReader<FeaturePackBuild
             elementsMap.put(new QName(NAMESPACE_1_0, Element.DEPENDENCIES.getLocalName()), Element.DEPENDENCIES);
             elementsMap.put(new QName(NAMESPACE_1_0, Element.ARTIFACT.getLocalName()), Element.ARTIFACT);
             elementsMap.put(new QName(NAMESPACE_1_0, Element.CONFIG.getLocalName()), Element.CONFIG);
+            elementsMap.put(new QName(NAMESPACE_1_0, Element.ARTIFACT_REFS.getLocalName()), Element.ARTIFACT_REFS);
             elementsMap.put(new QName(NAMESPACE_1_0, Element.COPY_ARTIFACTS.getLocalName()), Element.COPY_ARTIFACTS);
             elementsMap.put(new QName(NAMESPACE_1_0, Element.FILTER.getLocalName()), Element.FILTER);
             elementsMap.put(new QName(NAMESPACE_1_0, Element.FILE_PERMISSIONS.getLocalName()), Element.FILE_PERMISSIONS);
@@ -154,12 +157,14 @@ class FeaturePackBuildModelParser10 implements XMLElementReader<FeaturePackBuild
     private final CopyArtifactsModelParser10 copyArtifactsModelParser;
     private final FileFilterModelParser10 fileFilterModelParser;
     private final FilePermissionsModelParser10 filePermissionsModelParser;
+    private final ArtifactRefsModelParser10 artifactRefsModelParser;
 
     FeaturePackBuildModelParser10(PropertyResolver resolver) {
         this.propertyReplacer = new BuildPropertyReplacer(resolver);
         this.configModelParser = new ConfigModelParser10(this.propertyReplacer);
         this.fileFilterModelParser = new FileFilterModelParser10(this.propertyReplacer);
-        this.copyArtifactsModelParser = new CopyArtifactsModelParser10(this.propertyReplacer, this.fileFilterModelParser);
+        this.artifactRefsModelParser = new ArtifactRefsModelParser10(this.propertyReplacer);
+        this.copyArtifactsModelParser = new CopyArtifactsModelParser10(this.propertyReplacer, this.fileFilterModelParser, artifactRefsModelParser);
         this.filePermissionsModelParser = new FilePermissionsModelParser10(this.propertyReplacer, this.fileFilterModelParser);
     }
 
@@ -191,7 +196,10 @@ class FeaturePackBuildModelParser10 implements XMLElementReader<FeaturePackBuild
                             configModelParser.parseConfig(reader, result.getConfig());
                             break;
                         case COPY_ARTIFACTS:
-                            copyArtifactsModelParser.parseCopyArtifacts(reader, result.getCopyArtifacts());
+                            copyArtifactsModelParser.parseCopyArtifacts(reader, result.getCopyArtifacts(), result.getArtifactRefs());
+                            break;
+                        case ARTIFACT_REFS:
+                            artifactRefsModelParser.parseArtifactRefs(reader, result.getArtifactRefs());
                             break;
                         case FILE_PERMISSIONS:
                             filePermissionsModelParser.parseFilePermissions(reader, result.getFilePermissions());
@@ -225,7 +233,7 @@ class FeaturePackBuildModelParser10 implements XMLElementReader<FeaturePackBuild
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case ARTIFACT:
-                            result.getDependencies().add(parseName(reader));
+                            result.getDependencies().add(artifactRefsModelParser.parseArtifactName(parseName(reader), "zip", result.getArtifactRefs()));
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);

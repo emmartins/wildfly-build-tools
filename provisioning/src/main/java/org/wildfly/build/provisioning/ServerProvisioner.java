@@ -19,7 +19,9 @@ package org.wildfly.build.provisioning;
 import org.jboss.logging.Logger;
 import org.wildfly.build.ArtifactFileResolver;
 import org.wildfly.build.ArtifactResolver;
+import org.wildfly.build.BuildArtifactResolver;
 import org.wildfly.build.Locations;
+import org.wildfly.build.Artifact;
 import org.wildfly.build.common.model.ConfigFile;
 import org.wildfly.build.common.model.ConfigFileOverride;
 import org.wildfly.build.common.model.CopyArtifact;
@@ -27,7 +29,6 @@ import org.wildfly.build.common.model.FileFilter;
 import org.wildfly.build.common.model.FilePermission;
 import org.wildfly.build.configassembly.ConfigurationAssembler;
 import org.wildfly.build.configassembly.SubsystemConfig;
-import org.wildfly.build.pack.model.Artifact;
 import org.wildfly.build.pack.model.FeaturePack;
 import org.wildfly.build.pack.model.FeaturePackFactory;
 import org.wildfly.build.pack.model.ModuleIdentifier;
@@ -76,13 +77,14 @@ public class ServerProvisioner {
 
     private static final boolean OS_WINDOWS = System.getProperty("os.name").contains("indows");
 
-    public static void build(ServerProvisioningDescription description, File outputDirectory, ArtifactFileResolver artifactFileResolver, ArtifactResolver versionOverrideArtifactResolver) {
+    public static void build(ServerProvisioningDescription description, File outputDirectory, ArtifactFileResolver artifactFileResolver, BuildArtifactResolver buildArtifactResolver) {
         final ServerProvisioning serverProvisioning = new ServerProvisioning(description);
         final List<String> errors = new ArrayList<>();
         try {
             // create the feature packs
             for (ServerProvisioningDescription.FeaturePack serverProvisioningFeaturePackDescription : description.getFeaturePacks()) {
-                final FeaturePack featurePack = FeaturePackFactory.createPack(serverProvisioningFeaturePackDescription.getArtifact(), artifactFileResolver, versionOverrideArtifactResolver);
+                final Artifact featurePackArtifact = buildArtifactResolver.getArtifact(serverProvisioningFeaturePackDescription.getArtifact());
+                final FeaturePack featurePack = FeaturePackFactory.createPack(featurePackArtifact, artifactFileResolver, buildArtifactResolver);
                 serverProvisioning.getFeaturePacks().add(new ServerProvisioningFeaturePack(serverProvisioningFeaturePackDescription, featurePack, artifactFileResolver));
             }
             // create output dir
@@ -100,7 +102,7 @@ public class ServerProvisioner {
             }
             final Set<String> filesProcessed = new HashSet<>();
             // process server provisioning copy-artifacts
-            processCopyArtifacts(serverProvisioning.getDescription().getCopyArtifacts(), versionOverrideArtifactResolver, outputDirectory, filesProcessed, artifactFileResolver, schemaOutputDirectory);
+            processCopyArtifacts(serverProvisioning.getDescription().getCopyArtifacts(), buildArtifactResolver, outputDirectory, filesProcessed, artifactFileResolver, schemaOutputDirectory);
             // process modules (needs to be done for all feature packs before any config is processed, due to subsystem template gathering)
             processModules(serverProvisioning, outputDirectory, filesProcessed, artifactFileResolver, schemaOutputDirectory);
             // process the server config

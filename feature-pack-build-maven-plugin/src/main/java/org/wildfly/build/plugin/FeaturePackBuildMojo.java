@@ -29,6 +29,8 @@ import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.wildfly.build.AetherArtifactFileResolver;
+import org.wildfly.build.BuildArtifactResolver;
+import org.wildfly.build.BuildProperties;
 import org.wildfly.build.Locations;
 import org.wildfly.build.featurepack.FeaturePackBuilder;
 import org.wildfly.build.featurepack.model.FeaturePackBuild;
@@ -104,17 +106,20 @@ public class FeaturePackBuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
     private List<RemoteRepository> remoteRepos;
 
+    @Parameter(alias = BuildProperties.USE_MAVEN_PROJECT_ARTIFACT_RESOLVER, defaultValue = "true", readonly = true)
+    private Boolean useMavenProjectArtifactResolver = true;
+
+    @Parameter(alias = BuildProperties.SYSTEM_PROPERTIES_VERSION_OVERRIDES, defaultValue = "false", readonly = true)
+    private Boolean systemPropertyVersionOverrides = false;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         copyContents();
         try (FileInputStream configStream = new FileInputStream(new File(configDir, configFile))) {
-            Properties properties = new Properties();
-            properties.putAll(project.getProperties());
-            properties.putAll(System.getProperties());
-            properties.put("project.version", project.getVersion()); //TODO: figure out the correct way to do this
+            final Properties properties = MojoUtils.getBuildProperties(project);
             final FeaturePackBuild build = new FeaturePackBuildModelParser(new MapPropertyResolver(properties)).parse(configStream);
-            File target = new File(buildName, serverName);
-            FeaturePackBuilder.build(build, target, new MavenProjectArtifactResolver(project), new AetherArtifactFileResolver(repoSystem, repoSession, remoteRepos));
+            final BuildArtifactResolver buildArtifactResolver = MojoUtils.createBuildArtifactResolver(systemPropertyVersionOverrides, properties, useMavenProjectArtifactResolver, project, build.getArtifactRefs());
+            FeaturePackBuilder.build(build, new File(buildName, serverName), buildArtifactResolver, new AetherArtifactFileResolver(repoSystem, repoSession, remoteRepos));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

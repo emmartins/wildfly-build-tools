@@ -13,27 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.wildfly.build;
 
-import java.util.Set;
-
 /**
+ * Properties which customize all build behaviours.
  * @author Eduardo Martins
  */
-public interface ArtifactResolver {
+public class BuildProperties {
 
     /**
-     * Retrieves the artifact with the specified artifact name.
-     * @param artifactName
-     * @return
+     * indicates if a maven project's artifacts should be included in artifact resolving
      */
-    Artifact getArtifact(String artifactName);
+    public static final String USE_MAVEN_PROJECT_ARTIFACT_RESOLVER = "use-maven-project-artifact-resolver";
 
     /**
-     * Retrieves the set of artifact names known by the resolver.
-     * @return
+     * indicates if system properties should be allowed to override artifact versions
      */
-    Set<String> getArtifactNames();
-
+    public static final String SYSTEM_PROPERTIES_VERSION_OVERRIDES = "system-property-version-overrides";
 }

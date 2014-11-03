@@ -17,8 +17,8 @@
 package org.wildfly.build.util;
 
 import org.wildfly.build.ArtifactFileResolver;
+import org.wildfly.build.Artifact;
 import org.wildfly.build.configassembly.SubsystemInputStreamSources;
-import org.wildfly.build.pack.model.Artifact;
 import org.wildfly.build.pack.model.FeaturePack;
 
 import java.io.File;

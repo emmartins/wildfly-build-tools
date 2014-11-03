@@ -17,50 +17,52 @@
 package org.wildfly.build.plugin;
 
 import org.apache.maven.project.MavenProject;
-import org.wildfly.build.ArtifactResolver;
-import org.wildfly.build.pack.model.Artifact;
-
-import java.util.HashMap;
-import java.util.Map;
+import org.wildfly.build.Artifact;
+import org.wildfly.build.MapArtifactResolver;
 
 /**
+ * An artifact resolver for a maven project's artifacts.
  * @author Eduardo Martins
  */
-public class MavenProjectArtifactResolver implements ArtifactResolver {
-
-    private final Map<String, Artifact> artifactMap;
+public class MavenProjectArtifactResolver extends MapArtifactResolver {
 
     public MavenProjectArtifactResolver(MavenProject mavenProject) {
-        this.artifactMap = new HashMap<>();
         for (org.apache.maven.artifact.Artifact mavenProjectArtifact : mavenProject.getArtifacts()) {
-            final Artifact artifact = new Artifact(mavenProjectArtifact.getGroupId(), mavenProjectArtifact.getArtifactId(), mavenProjectArtifact.getClassifier(), mavenProjectArtifact.getType(), mavenProjectArtifact.getVersion());
+            final String groupId = mavenProjectArtifact.getGroupId();
+            final String artifactId = mavenProjectArtifact.getArtifactId();
+            final String version = mavenProjectArtifact.getVersion();
+            final String classifier = mavenProjectArtifact.getClassifier();
+            final String extension = mavenProjectArtifact.getType();
+            final Artifact artifact = new Artifact(groupId, artifactId, extension, classifier, version);
             StringBuilder sb = new StringBuilder();
-            sb.append(artifact.getGACE().getGroupId());
+            sb.append(groupId);
             sb.append(':');
-            sb.append(artifact.getGACE().getArtifactId());
-            if (artifact.getGACE().getClassifier() != null && !artifact.getGACE().getClassifier().isEmpty()) {
-                artifactMap.put(sb.append("::").append(artifact.getGACE().getClassifier()).toString(), artifact);
-            } else {
+            sb.append(artifactId);
+            // the default artifact name's is groupId:artifactId
+            final String defaultArtifactName = sb.toString();
+            boolean onlyPutDefaultArtifactNameIfAbsent = false;
+            if (extension != null && !extension.isEmpty()) {
+                sb.append(":").append(extension);
+                // put groupId:artifactId:extension
                 artifactMap.put(sb.toString(), artifact);
+                onlyPutDefaultArtifactNameIfAbsent = true;
+            }
+            if (classifier != null && !classifier.isEmpty()) {
+                if (extension != null && !extension.isEmpty()) {
+                    sb.append(':');
+                } else {
+                    sb.append("::");
+                }
+                sb.append(classifier);
+                // put groupId:artifactId:extension:classifier or groupId:artifactId::classifier
+                artifactMap.put(sb.toString(), artifact);
+                onlyPutDefaultArtifactNameIfAbsent = true;
+            }
+            // put default artifact name if there is no extension and classifier, or such name is not yet in refs (avoids replacing the default without classifier)
+            if (!onlyPutDefaultArtifactNameIfAbsent || !artifactMap.containsKey(defaultArtifactName)) {
+                artifactMap.put(defaultArtifactName, artifact);
             }
         }
-    }
-
-    @Override
-    public Artifact getArtifact(String artifactCoords) {
-        return artifactMap.get(artifactCoords);
-    }
-
-    @Override
-    public Artifact getArtifact(Artifact.GACE GACE) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(GACE.getGroupId());
-        sb.append(':');
-        sb.append(GACE.getArtifactId());
-        if (GACE.getClassifier() != null) {
-            sb.append("::").append(GACE.getClassifier());
-        }
-        return getArtifact(sb.toString());
     }
 
 }

@@ -16,7 +16,6 @@
 
 package org.wildfly.build;
 
-import org.wildfly.build.pack.model.Artifact;
 
 import java.io.File;
 

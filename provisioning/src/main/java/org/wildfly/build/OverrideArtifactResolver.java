@@ -16,24 +16,19 @@
 
 package org.wildfly.build;
 
-import java.util.Set;
+import java.util.Map;
 
 /**
+ * An artifact resolver that may be used to override other resolver's artifacts.
  * @author Eduardo Martins
  */
-public interface ArtifactResolver {
+public interface OverrideArtifactResolver extends ArtifactResolver {
 
     /**
-     * Retrieves the artifact with the specified artifact name.
-     * @param artifactName
-     * @return
+     * Overrides the specified resolver's artifacts.
+     * @param artifactResolver
+     * @return a map containing the artifacts overridden
      */
-    Artifact getArtifact(String artifactName);
-
-    /**
-     * Retrieves the set of artifact names known by the resolver.
-     * @return
-     */
-    Set<String> getArtifactNames();
+    Map<String, Artifact> override(ArtifactResolver artifactResolver);
 
 }

@@ -18,6 +18,7 @@ package org.wildfly.build.pack.model;
 
 import org.wildfly.build.ArtifactFileResolver;
 import org.wildfly.build.ArtifactResolver;
+import org.wildfly.build.Artifact;
 import org.wildfly.build.util.ModuleParseResult;
 import org.wildfly.build.util.ModuleParser;
 import org.wildfly.build.util.ZipFileSubsystemInputStreamSources;

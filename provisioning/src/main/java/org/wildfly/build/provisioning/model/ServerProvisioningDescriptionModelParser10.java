@@ -18,13 +18,13 @@ package org.wildfly.build.provisioning.model;
 
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
+import org.wildfly.build.common.model.ArtifactRefsModelParser10;
 import org.wildfly.build.common.model.ConfigFileOverride;
 import org.wildfly.build.common.model.ConfigOverride;
 import org.wildfly.build.common.model.CopyArtifactsModelParser10;
 import org.wildfly.build.common.model.FileFilterModelParser10;
 import org.wildfly.build.configassembly.SubsystemConfig;
 import org.wildfly.build.configassembly.SubsystemsParser;
-import org.wildfly.build.pack.model.Artifact;
 import org.wildfly.build.util.BuildPropertyReplacer;
 import org.wildfly.build.util.MapPropertyResolver;
 import org.wildfly.build.util.PropertyResolver;
@@ -59,7 +59,6 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
         SERVER_PROVISIONING("server-provisioning"),
         FEATURE_PACKS("feature-packs"),
         FEATURE_PACK("feature-pack"),
-        ARTIFACT("artifact"),
         MODULES("modules"),
         CONFIG("config"),
         STANDALONE("standalone"),
@@ -68,8 +67,7 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
         SUBSYSTEMS("subsystems"),
         SUBSYSTEM("subsystem"),
         CONTENTS("contents"),
-        VERSION_OVERRIDES("version-overrides"),
-        VERSION_OVERRIDE("version-override"),
+        ARTIFACT_REFS(ArtifactRefsModelParser10.ELEMENT_LOCAL_NAME),
         COPY_ARTIFACTS(CopyArtifactsModelParser10.ELEMENT_LOCAL_NAME),
         FILTER(FileFilterModelParser10.ELEMENT_LOCAL_NAME),
         ;
@@ -81,7 +79,6 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
             elementsMap.put(new QName(NAMESPACE_1_0, SERVER_PROVISIONING.getLocalName()), SERVER_PROVISIONING);
             elementsMap.put(new QName(NAMESPACE_1_0, FEATURE_PACKS.getLocalName()), FEATURE_PACKS);
             elementsMap.put(new QName(NAMESPACE_1_0, FEATURE_PACK.getLocalName()), FEATURE_PACK);
-            elementsMap.put(new QName(NAMESPACE_1_0, ARTIFACT.getLocalName()), ARTIFACT);
             elementsMap.put(new QName(NAMESPACE_1_0, MODULES.getLocalName()), MODULES);
             elementsMap.put(new QName(NAMESPACE_1_0, FILTER.getLocalName()), FILTER);
             elementsMap.put(new QName(NAMESPACE_1_0, CONFIG.getLocalName()), CONFIG);
@@ -91,8 +88,7 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
             elementsMap.put(new QName(NAMESPACE_1_0, SUBSYSTEMS.getLocalName()), SUBSYSTEMS);
             elementsMap.put(new QName(NAMESPACE_1_0, SUBSYSTEM.getLocalName()), SUBSYSTEM);
             elementsMap.put(new QName(NAMESPACE_1_0, CONTENTS.getLocalName()), CONTENTS);
-            elementsMap.put(new QName(NAMESPACE_1_0, VERSION_OVERRIDES.getLocalName()), VERSION_OVERRIDES);
-            elementsMap.put(new QName(NAMESPACE_1_0, VERSION_OVERRIDE.getLocalName()), VERSION_OVERRIDE);
+            elementsMap.put(new QName(NAMESPACE_1_0, ARTIFACT_REFS.getLocalName()), ARTIFACT_REFS);
             elementsMap.put(new QName(NAMESPACE_1_0, COPY_ARTIFACTS.getLocalName()), COPY_ARTIFACTS);
             elements = elementsMap;
         }
@@ -138,11 +134,7 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
         USE_TEMPLATE("use-template"),
         NAME("name"),
         VALUE("value"),
-        GROUP_ID("groupId"),
-        ARTIFACT_ID("artifactId"),
-        CLASSIFIER("classifier"),
-        EXTENSION("extension"),
-        VERSION("version"),
+        ARTIFACT("artifact"),
         ;
 
         private static final Map<QName, Attribute> attributes;
@@ -158,11 +150,7 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
             attributesMap.put(new QName(VALUE.getLocalName()), VALUE);
             attributesMap.put(new QName(COPY_MODULE_ARTIFACTS.getLocalName()), COPY_MODULE_ARTIFACTS);
             attributesMap.put(new QName(EXTRACT_SCHEMAS.getLocalName()), EXTRACT_SCHEMAS);
-            attributesMap.put(new QName(GROUP_ID.getLocalName()), GROUP_ID);
-            attributesMap.put(new QName(ARTIFACT_ID.getLocalName()), ARTIFACT_ID);
-            attributesMap.put(new QName(CLASSIFIER.getLocalName()), CLASSIFIER);
-            attributesMap.put(new QName(EXTENSION.getLocalName()), EXTENSION);
-            attributesMap.put(new QName(VERSION.getLocalName()), VERSION);
+            attributesMap.put(new QName(ARTIFACT.getLocalName()), ARTIFACT);
 
 
             attributes = attributesMap;
@@ -192,11 +180,13 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
     private final BuildPropertyReplacer propertyReplacer;
     private final CopyArtifactsModelParser10 copyArtifactsModelParser;
     private final FileFilterModelParser10 fileFilterModelParser;
+    private final ArtifactRefsModelParser10 artifactRefsModelParser;
 
     ServerProvisioningDescriptionModelParser10(PropertyResolver resolver) {
         this.propertyReplacer = new BuildPropertyReplacer(resolver);
         this.fileFilterModelParser = new FileFilterModelParser10(propertyReplacer);
-        this.copyArtifactsModelParser = new CopyArtifactsModelParser10(this.propertyReplacer, this.fileFilterModelParser);
+        this.artifactRefsModelParser = new ArtifactRefsModelParser10(this.propertyReplacer);
+        this.copyArtifactsModelParser = new CopyArtifactsModelParser10(this.propertyReplacer, this.fileFilterModelParser, artifactRefsModelParser);
     }
 
     @Override
@@ -232,11 +222,11 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
                         case FEATURE_PACKS:
                             parseFeaturePacks(reader, result);
                             break;
-                        case VERSION_OVERRIDES:
-                            parseVersionOverrides(reader, result);
+                        case ARTIFACT_REFS:
+                            artifactRefsModelParser.parseArtifactRefs(reader, result.getArtifactRefs());
                             break;
                         case COPY_ARTIFACTS:
-                            copyArtifactsModelParser.parseCopyArtifacts(reader, result.getCopyArtifacts());
+                            copyArtifactsModelParser.parseCopyArtifacts(reader, result.getCopyArtifacts(), result.getArtifactRefs());
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -277,7 +267,23 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
     }
 
     private void parseFeaturePack(final XMLStreamReader reader, final ServerProvisioningDescription result) throws XMLStreamException {
-        Artifact artifact = parseArtifact(reader, "zip", false);
+        String artifact = null;
+        final Set<Attribute> required = EnumSet.of(Attribute.ARTIFACT);
+        final int count = reader.getAttributeCount();
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            required.remove(attribute);
+            switch (attribute) {
+                case ARTIFACT:
+                    artifact = artifactRefsModelParser.parseArtifactName(propertyReplacer.replaceProperties(reader.getAttributeValue(i)), "zip", result.getArtifactRefs());
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedContent(reader);
+            }
+        }
+        if (!required.isEmpty()) {
+            throw ParsingUtils.missingAttributes(reader.getLocation(), required);
+        }
         ServerProvisioningDescription.FeaturePack.ModuleFilters moduleFilters = null;
         ConfigOverride config = null;
         ServerProvisioningDescription.FeaturePack.ContentFilters contentFilters = null;
@@ -286,7 +292,6 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
                     result.getFeaturePacks().add(new ServerProvisioningDescription.FeaturePack(artifact, moduleFilters, config, contentFilters, subsystems));
-                    result.getVersionOverrides().add(artifact);
                     return;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
@@ -593,72 +598,6 @@ class ServerProvisioningDescriptionModelParser10 implements XMLElementReader<Ser
         ParsingUtils.parseNoContent(reader);
 
         return new ServerProvisioningDescription.FeaturePack.Subsystem(name, transitive);
-    }
-
-    private void parseVersionOverrides(final XMLStreamReader reader, final ServerProvisioningDescription result) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case XMLStreamConstants.END_ELEMENT: {
-                    return;
-                }
-                case XMLStreamConstants.START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    switch (element) {
-                        case VERSION_OVERRIDE:
-                            result.getVersionOverrides().add(parseArtifact(reader, null, true));
-                            break;
-                        default:
-                            throw ParsingUtils.unexpectedContent(reader);
-                    }
-                    break;
-                }
-                default: {
-                    throw ParsingUtils.unexpectedContent(reader);
-                }
-            }
-        }
-        throw ParsingUtils.endOfDocument(reader.getLocation());
-    }
-
-    private Artifact parseArtifact(final XMLStreamReader reader, String defaultExtension, boolean parseNoContent) throws XMLStreamException {
-        final int count = reader.getAttributeCount();
-        String artifact = null;
-        String version = null;
-        String groupId = null;
-        String classifier = null;
-        String extension = defaultExtension;
-        final Set<Attribute> required = EnumSet.of(Attribute.ARTIFACT_ID, Attribute.VERSION, Attribute.GROUP_ID);
-        for (int i = 0; i < count; i++) {
-            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
-            required.remove(attribute);
-            switch (attribute) {
-                case GROUP_ID:
-                    groupId = propertyReplacer.replaceProperties(reader.getAttributeValue(i));
-                    break;
-                case ARTIFACT_ID:
-                    artifact = propertyReplacer.replaceProperties(reader.getAttributeValue(i));
-                    break;
-                case VERSION:
-                    version = propertyReplacer.replaceProperties(reader.getAttributeValue(i));
-                    break;
-                case CLASSIFIER:
-                    classifier = propertyReplacer.replaceProperties(reader.getAttributeValue(i));
-                    break;
-                case EXTENSION:
-                    extension = propertyReplacer.replaceProperties(reader.getAttributeValue(i));
-                    break;
-                default:
-                    throw ParsingUtils.unexpectedContent(reader);
-            }
-        }
-        if (!required.isEmpty()) {
-            throw ParsingUtils.missingAttributes(reader.getLocation(), required);
-        }
-        if (parseNoContent) {
-            ParsingUtils.parseNoContent(reader);
-        }
-
-        return new Artifact(groupId, artifact, classifier, extension, version);
     }
 
 }

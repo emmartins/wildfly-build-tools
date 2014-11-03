@@ -17,18 +17,17 @@
 package org.wildfly.build.featurepack;
 
 import org.jboss.logging.Logger;
+import org.wildfly.build.Artifact;
 import org.wildfly.build.ArtifactFileResolver;
-import org.wildfly.build.ArtifactResolver;
+import org.wildfly.build.BuildArtifactResolver;
 import org.wildfly.build.Locations;
-import org.wildfly.build.featurepack.model.FeaturePackBuild;
-import org.wildfly.build.pack.model.Artifact;
 import org.wildfly.build.common.model.CopyArtifact;
+import org.wildfly.build.common.model.FileFilter;
+import org.wildfly.build.featurepack.model.FeaturePackBuild;
 import org.wildfly.build.pack.model.FeaturePack;
-import org.wildfly.build.pack.model.FeaturePackArtifactResolver;
 import org.wildfly.build.pack.model.FeaturePackDescription;
 import org.wildfly.build.pack.model.FeaturePackDescriptionXMLWriter10;
 import org.wildfly.build.pack.model.FeaturePackFactory;
-import org.wildfly.build.common.model.FileFilter;
 import org.wildfly.build.pack.model.ModuleIdentifier;
 import org.wildfly.build.util.FileUtils;
 import org.wildfly.build.util.ModuleParseResult;
@@ -45,7 +44,6 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,17 +68,17 @@ public class FeaturePackBuilder {
 
     private static final Logger logger = Logger.getLogger(FeaturePackBuilder.class);
 
-    public static void build(FeaturePackBuild build, File serverDirectory, ArtifactResolver artifactResolver, ArtifactFileResolver artifactFileResolver) {
+    public static void build(FeaturePackBuild build, File serverDirectory, BuildArtifactResolver buildArtifactResolver, ArtifactFileResolver artifactFileResolver) {
 
         //List of errors that were encountered. These will be reported at the end so they are all reported in one go.
         final List<String> errors = new ArrayList<>();
         final Set<ModuleIdentifier> knownModules = new HashSet<>();
-        final Map<Artifact.GACE, String> artifactVersionMap = new HashMap<>();
+        final Map<String, Artifact> artifactRefs = new HashMap<>();
         final FeaturePackDescription featurePackDescription = new FeaturePackDescription(build.getDependencies(), build.getConfig(), build.getCopyArtifacts(), build.getFilePermissions());
         try {
-            processDependencies(build.getDependencies(), knownModules, new HashSet<String>(), artifactResolver, artifactFileResolver, artifactVersionMap);
-            processModulesDirectory(knownModules, serverDirectory, artifactResolver, artifactVersionMap, errors);
-            processVersions(featurePackDescription, artifactResolver, artifactVersionMap);
+            processDependencies(build.getDependencies(), knownModules, new HashSet<String>(), buildArtifactResolver, artifactFileResolver, artifactRefs);
+            processModulesDirectory(knownModules, serverDirectory, buildArtifactResolver, artifactRefs, errors);
+            processArtifactRefs(featurePackDescription, buildArtifactResolver, artifactRefs);
             processContentsDirectory(build, serverDirectory);
             writeFeaturePackXml(featurePackDescription, serverDirectory);
         } catch (Exception e) {
@@ -98,39 +96,33 @@ public class FeaturePackBuilder {
         }
     }
 
-    private static void processDependencies(List<String> dependencies, Set<ModuleIdentifier> knownModules, Set<String> featurePacksProcessed, ArtifactResolver buildArtifactResolver, ArtifactFileResolver artifactFileResolver, final Map<Artifact.GACE, String> artifactVersionMap) {
+    private static void processDependencies(List<String> dependencies, Set<ModuleIdentifier> knownModules, Set<String> featurePacksProcessed, BuildArtifactResolver buildArtifactResolver, ArtifactFileResolver artifactFileResolver, Map<String, Artifact> artifactRefs) {
         for (String dependency : dependencies) {
             if (!featurePacksProcessed.add(dependency)) {
                 continue;
             }
+            // get artifact from build resolver
             Artifact dependencyArtifact = buildArtifactResolver.getArtifact(dependency);
             // load the dependency feature pack
-            FeaturePack dependencyFeaturePack = FeaturePackFactory.createPack(dependencyArtifact, artifactFileResolver, new FeaturePackArtifactResolver(Collections.<Artifact>emptyList()));
-            // put its artifact to the version map
-            artifactVersionMap.put(dependencyFeaturePack.getArtifact().getGACE(), dependencyFeaturePack.getArtifact().getVersion());
+            FeaturePack dependencyFeaturePack = FeaturePackFactory.createPack(dependencyArtifact, artifactFileResolver);
+            // put its artifact to the artifact refs
+            artifactRefs.put(dependency, dependencyArtifact);
             // process it
-            processDependency(dependencyFeaturePack, knownModules, buildArtifactResolver, artifactVersionMap);
+            processDependency(dependencyFeaturePack, knownModules, buildArtifactResolver, artifactRefs);
         }
     }
 
-    private static void processDependency(FeaturePack dependencyFeaturePack, Set<ModuleIdentifier> knownModules, ArtifactResolver buildArtifactResolver, Map<Artifact.GACE, String> artifactVersionMap) {
-        // the new feature pack may override an artifact version for its dependencies, if that's the case it goes to the version map too
-        for (Artifact dependencyVersionArtifact : dependencyFeaturePack.getDescription().getArtifactVersions()) {
-            if (!artifactVersionMap.containsKey(dependencyVersionArtifact.getGACE())) {
-                Artifact artifact = buildArtifactResolver.getArtifact(dependencyVersionArtifact.getGACE());
-                if (artifact != null) {
-                    artifactVersionMap.put(artifact.getGACE(), artifact.getVersion());
-                }
-            }
-        }
+    private static void processDependency(FeaturePack dependencyFeaturePack, Set<ModuleIdentifier> knownModules, BuildArtifactResolver buildArtifactResolver, final Map<String, Artifact> artifactRefs) {
+        // the new feature pack may override an artifact referenced by its dependencies
+        artifactRefs.putAll(buildArtifactResolver.override(dependencyFeaturePack.getArtifactResolver()));
         knownModules.addAll(dependencyFeaturePack.getFeaturePackModules().keySet());
         // process its dependencies too
         for (FeaturePack featurePack : dependencyFeaturePack.getDependencies()) {
-            processDependency(featurePack, knownModules, buildArtifactResolver, artifactVersionMap);
+            processDependency(featurePack, knownModules, buildArtifactResolver, artifactRefs);
         }
     }
 
-    private static void processModulesDirectory(Set<ModuleIdentifier> packProvidedModules, File serverDirectory, final ArtifactResolver artifactResolver, final Map<Artifact.GACE, String> artifactVersionMap,  final List<String> errors) throws IOException {
+    private static void processModulesDirectory(Set<ModuleIdentifier> packProvidedModules, File serverDirectory, final BuildArtifactResolver buildArtifactResolver, final Map<String, Artifact> artifactRefs, final List<String> errors) throws IOException {
         final Path modulesDir = Paths.get(new File(serverDirectory, Locations.MODULES).getAbsolutePath());
         final HashSet<ModuleIdentifier> knownModules = new HashSet<>(packProvidedModules);
         final Map<ModuleIdentifier, Set<ModuleIdentifier>> requiredDepds = new HashMap<>();
@@ -144,11 +136,11 @@ public class FeaturePackBuilder {
                     ModuleParseResult result = ModuleParser.parse(file);
                     knownModules.add(result.getIdentifier());
                     for (ModuleParseResult.ArtifactName artifactName : result.getArtifacts()) {
-                        Artifact artifact = artifactResolver.getArtifact(artifactName.getArtifactCoords());
+                        Artifact artifact = buildArtifactResolver.getArtifact(artifactName.getArtifactCoords());
                         if(artifact == null) {
                             errors.add("Could not determine version for artifact " + artifactName);
                         }
-                        artifactVersionMap.put(artifact.getGACE(), artifact.getVersion());
+                        artifactRefs.put(artifactName.getArtifactCoords(), artifact);
                     }
                     for(ModuleParseResult.ModuleDependency dep : result.getDependencies()) {
                         if(!dep.isOptional()) {
@@ -177,19 +169,18 @@ public class FeaturePackBuilder {
 
     }
 
-    private static void processVersions(FeaturePackDescription featurePackDescription, ArtifactResolver artifactResolver, Map<Artifact.GACE, String> artifactVersionMap) {
+    private static void processArtifactRefs(FeaturePackDescription featurePackDescription, BuildArtifactResolver artifactResolver, Map<String, Artifact> artifactRefs) {
         // resolve copy-artifact versions and add to map
         for (CopyArtifact copyArtifact : featurePackDescription.getCopyArtifacts()) {
-            final Artifact artifact = artifactResolver.getArtifact(copyArtifact.getArtifact());
+            final String artifactName = copyArtifact.getArtifact();
+            final Artifact artifact = artifactResolver.getArtifact(artifactName);
             if(artifact == null) {
                 throw new RuntimeException("Could not resolve artifact for copy artifact " + copyArtifact.getArtifact());
             }
-            artifactVersionMap.put(artifact.getGACE(), artifact.getVersion());
+            artifactRefs.put(artifactName, artifact);
         }
         // fill feature pack description versions
-        for (Map.Entry<Artifact.GACE, String> mapEntry : artifactVersionMap.entrySet()) {
-            featurePackDescription.getArtifactVersions().add(new Artifact(mapEntry.getKey(), mapEntry.getValue()));
-        }
+        featurePackDescription.getArtifactRefs().putAll(artifactRefs);
     }
 
     private static void processContentsDirectory(final FeaturePackBuild build, File serverDirectory) throws IOException {

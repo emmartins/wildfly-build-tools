@@ -17,13 +17,12 @@
 package org.wildfly.build.provisioning;
 
 import org.wildfly.build.AetherArtifactFileResolver;
-import org.wildfly.build.ArtifactResolver;
-import org.wildfly.build.pack.model.DelegatingArtifactResolver;
-import org.wildfly.build.pack.model.FeaturePackArtifactResolver;
+import org.wildfly.build.BuildArtifactResolver;
+import org.wildfly.build.BuildProperties;
 import org.wildfly.build.provisioning.model.ServerProvisioningDescription;
 import org.wildfly.build.provisioning.model.ServerProvisioningDescriptionModelParser;
+import org.wildfly.build.MapArtifactResolver;
 import org.wildfly.build.util.MapPropertyResolver;
-import org.wildfly.build.util.PropertiesBasedArtifactResolver;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -46,7 +45,6 @@ public class StandaloneServerProvisioning {
         final Properties environment = System.getProperties();
         // setup build dir
         final File buildDir = new File("target");
-        buildDir.mkdirs();
         // create the standalone aether artifact file resolver, reuse maven local repo if found at standard location
         final File mavenLocalRepositoryBaseDir = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
         final AetherArtifactFileResolver aetherArtifactFileResolver = new StandaloneAetherArtifactFileResolver(mavenLocalRepositoryBaseDir.exists() ? mavenLocalRepositoryBaseDir : (new File(buildDir, "repository")));
@@ -54,14 +52,12 @@ public class StandaloneServerProvisioning {
             // parse description
             final ServerProvisioningDescription serverProvisioningDescription = new ServerProvisioningDescriptionModelParser(new MapPropertyResolver(environment)).parse(configStream);
             // create version override artifact resolver
-            ArtifactResolver overrideArtifactResolver = new FeaturePackArtifactResolver(serverProvisioningDescription.getVersionOverrides());
-            if(Boolean.valueOf(environment.getProperty("system-property-version-overrides", "false"))) {
-                overrideArtifactResolver = new DelegatingArtifactResolver(new PropertiesBasedArtifactResolver(environment), overrideArtifactResolver);
-            }
+            final boolean systemPropertyVersionOverrides = Boolean.valueOf(environment.getProperty(BuildProperties.SYSTEM_PROPERTIES_VERSION_OVERRIDES, "false"));
+            final BuildArtifactResolver buildArtifactResolver = new BuildArtifactResolver((systemPropertyVersionOverrides ? environment : null), new MapArtifactResolver(serverProvisioningDescription.getArtifactRefs()));
             // provision the server
             final File outputDir = new File(buildDir, "wildfly");
-            ServerProvisioner.build(serverProvisioningDescription, outputDir, aetherArtifactFileResolver, overrideArtifactResolver);
-            System.out.print("Server provisioning at "+outputDir+" complete.");
+            ServerProvisioner.build(serverProvisioningDescription, outputDir, aetherArtifactFileResolver, buildArtifactResolver);
+            System.out.println("Server provisioning at " + outputDir + " complete.");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
