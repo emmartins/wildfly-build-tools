@@ -80,12 +80,16 @@ public class ServerProvisioningDescription {
         private final ContentFilters contentFilters;
         private final List<Subsystem> subsystems;
 
-        FeaturePack(String artifact, ModuleFilters moduleFilters, ConfigOverride configOverride, ContentFilters contentFilters, List<Subsystem> subsystems) {
+        public FeaturePack(String artifact, ModuleFilters moduleFilters, ConfigOverride configOverride, ContentFilters contentFilters, List<Subsystem> subsystems) {
             this.artifact = artifact;
             this.moduleFilters = moduleFilters;
             this.configOverride = configOverride;
             this.contentFilters = contentFilters;
             this.subsystems = subsystems;
+        }
+
+        public FeaturePack(String artifact) {
+            this(artifact, null, null, null, null);
         }
 
         public String getArtifact() {
@@ -122,6 +126,11 @@ public class ServerProvisioningDescription {
          */
         public List<Subsystem> getSubsystems() {
             return subsystems;
+        }
+
+        @Override
+        public String toString() {
+            return artifact;
         }
 
         /**
